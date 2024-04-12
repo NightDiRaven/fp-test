@@ -17,7 +17,7 @@ class Database implements DatabaseInterface
     public function buildQuery(string $query, array $args = []): string
     {
         // This pattern matches placeholders with optional type specifiers
-        $pattern = '/\?(d|f|a|#)?/';
+        $pattern = '/\?([dfa#])?/';
         $index = 0;
 
         $callback = function($matches) use ($args, &$index) {
@@ -36,7 +36,7 @@ class Database implements DatabaseInterface
         $result = preg_replace_callback($pattern, $callback, $query);
 
         // Handle conditional blocks
-        $result = preg_replace_callback('/\{[^{}]*\}/', function($matches) {
+        $result = preg_replace_callback('/\{[^{}]*}/', function($matches) {
             // Check for the skip marker
             if (strpos($matches[0], $this->skip()) !== false) {
                 return '';
@@ -48,25 +48,19 @@ class Database implements DatabaseInterface
         return $result;
     }
 
-    private function formatValue($value, $type)
+    private function formatValue($value, $type): float|int|string
     {
-        switch ($type) {
-            case '?d':
-                return is_null($value) ? 'NULL' : intval($value);
-            case '?f':
-                return is_null($value) ? 'NULL' : floatval($value);
-            case '?a':
-                return $this->formatArray($value);
-            case '?#':
-                return $this->formatIdentifier($value);
-            case '?':
-                return $this->formatGeneric($value);
-            default:
-                throw new Exception("Unknown specifier: $type");
-        }
+        return match ($type) {
+            '?d' => is_null($value) ? 'NULL' : intval($value),
+            '?f' => is_null($value) ? 'NULL' : floatval($value),
+            '?a' => $this->formatArray($value),
+            '?#' => $this->formatIdentifier($value),
+            '?' => $this->formatGeneric($value),
+            default => throw new Exception("Unknown specifier: $type"),
+        };
     }
 
-    private function formatArray($values)
+    private function formatArray($values): string
     {
         if (!is_array($values)) {
             throw new Exception('Expected an array for ?a specifier.');
@@ -87,13 +81,13 @@ class Database implements DatabaseInterface
         }
     }
 
-    private function isAssoc(array $arr)
+    private function isAssoc(array $arr): bool
     {
         if ([] === $arr) return false;
         return array_keys($arr) !== range(0, count($arr) - 1);
     }
 
-    private function formatIdentifier($identifier)
+    private function formatIdentifier($identifier): string
     {
         if (is_array($identifier)) {
             return implode(', ', array_map(function($id) { return "`$id`"; }, $identifier));
@@ -101,7 +95,7 @@ class Database implements DatabaseInterface
         return "`$identifier`";
     }
 
-    private function formatGeneric($value)
+    private function formatGeneric($value): float|int|string
     {
         if (is_null($value)) {
             return 'NULL';
